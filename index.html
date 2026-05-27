@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="译 Translate">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="description" content="English ⇄ Chinese translator with image support and emotional nuance detection">
+<meta name="application-name" content="译 Translate">
+<link rel="manifest" href="manifest.json">
+<title>译 Translate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=DM+Mono:wght@300;400&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f0f;
+    --surface: #191919;
+    --surface2: #222222;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0ede6;
+    --text2: #8a8780;
+    --text3: #555350;
+    --accent: #c9a96e;
+    --accent2: #e8d5b0;
+    --red: #e05a4e;
+    --green: #5ab88a;
+    --blue: #6e8fca;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body { min-height: 100dvh; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 52px 20px 16px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .header-title { display: flex; align-items: baseline; gap: 10px; }
+  .header-zh { font-family: 'Noto Serif SC', serif; font-size: 26px; font-weight: 600; color: var(--accent); letter-spacing: -0.02em; }
+  .header-en { font-size: 13px; font-weight: 400; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; }
+  .settings-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border2); background: var(--surface); color: var(--text2); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; }
+  .settings-btn:hover { background: var(--surface2); color: var(--text); }
+
+  /* ── Main ── */
+  .main { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── No key banner ── */
+  .no-key-banner { background: rgba(224,90,78,0.1); border: 0.5px solid rgba(224,90,78,0.25); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: #e8a09a; display: none; align-items: center; gap: 10px; cursor: pointer; }
+  .no-key-banner.visible { display: flex; }
+  /* ── Fallback banner ── */
+  .fallback-banner { background: rgba(110,143,202,0.1); border: 0.5px solid rgba(110,143,202,0.25); border-radius: var(--radius); padding: 11px 14px; font-size: 12px; color: #a0b8e0; display: none; align-items: center; gap: 10px; line-height: 1.5; }
+  .fallback-banner.visible { display: flex; }
+  .fallback-banner strong { color: #c0d4f0; }
+  /* ── Fallback toggle in settings ── */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .toggle-label { font-size: 13px; color: var(--text2); }
+  .toggle-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track { position: absolute; inset: 0; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 12px; cursor: pointer; transition: background 0.2s; }
+  .toggle input:checked + .toggle-track { background: var(--accent); border-color: transparent; }
+  .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: var(--text3); border-radius: 50%; transition: transform 0.2s, background 0.2s; pointer-events: none; }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(18px); background: #0f0f0f; }
+  .na-text { font-size: 13px; color: var(--text3); font-style: italic; }
+
+  /* ── Mode tabs ── */
+  .mode-tabs { display: flex; gap: 4px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 4px; }
+  .mode-tab { flex: 1; text-align: center; padding: 9px 6px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; border-radius: 10px; transition: background 0.2s, color 0.2s; letter-spacing: 0.02em; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .mode-tab.active { background: var(--accent); color: #0f0f0f; }
+  .mode-tab .tab-icon { font-size: 14px; }
+
+  /* ── Text input card ── */
+  .input-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color 0.3s; }
+  .input-card.detected-en { border-color: rgba(201,169,110,0.3); }
+  .input-card.detected-zh { border-color: rgba(90,184,138,0.3); }
+  .input-card-top { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px 0; }
+  .lang-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); min-height: 20px; }
+  .lang-badge .lang-from { color: var(--text2); }
+  .lang-badge .lang-arrow { color: var(--text3); }
+  .lang-badge .lang-to { color: var(--accent); }
+  .lang-badge.active-en .lang-from { color: var(--accent2); }
+  .lang-badge.active-zh .lang-from { color: var(--green); }
+  .lang-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; transition: background 0.25s; }
+  .lang-badge.active-en .lang-dot { background: var(--accent); }
+  .lang-badge.active-zh .lang-dot { background: var(--green); }
+  textarea { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-family: 'Noto Serif SC', serif; font-size: 17px; font-weight: 300; line-height: 1.7; padding: 10px 16px 14px; resize: none; min-height: 110px; -webkit-appearance: none; }
+  textarea::placeholder { color: var(--text3); font-weight: 300; }
+  .input-footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 12px; border-top: 0.5px solid var(--border); }
+  .clear-btn { font-size: 11px; color: var(--text3); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.2s; }
+  .clear-btn:hover { color: var(--red); }
+
+  /* ── Image upload card ── */
+  .image-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; display: none; }
+  .image-card.visible { display: block; }
+
+  .image-drop-zone { border: 1.5px dashed var(--border2); border-radius: 10px; margin: 14px; padding: 22px 16px 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: border-color 0.2s, background 0.2s; text-align: center; }
+  .image-drop-zone.dragover { border-color: var(--accent); background: rgba(201,169,110,0.05); }
+
+  .drop-icon { font-size: 26px; color: var(--text3); line-height: 1; }
+  .drop-title { font-size: 14px; font-weight: 600; color: var(--text2); }
+  .drop-sub { font-size: 12px; color: var(--text3); line-height: 1.5; }
+
+  /* Upload action buttons row */
+  .drop-actions { display: flex; gap: 8px; width: 100%; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
+  .drop-action-btn { flex: 1; min-width: 110px; padding: 9px 10px; border-radius: var(--radius-sm); font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.18s; display: flex; align-items: center; justify-content: center; gap: 6px; letter-spacing: 0.02em; }
+  .drop-action-btn.primary { background: var(--accent); color: #0f0f0f; border: none; }
+  .drop-action-btn.primary:hover { opacity: 0.85; }
+  .drop-action-btn.secondary { background: none; color: var(--text2); border: 0.5px solid var(--border2); }
+  .drop-action-btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .drop-action-btn.secondary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Clipboard preview state */
+  .clipboard-preview-banner { display: none; align-items: center; gap: 10px; background: rgba(201,169,110,0.08); border: 0.5px solid rgba(201,169,110,0.2); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0 14px 12px; cursor: pointer; transition: background 0.2s; }
+  .clipboard-preview-banner:hover { background: rgba(201,169,110,0.14); }
+  .clipboard-preview-banner.visible { display: flex; }
+  .clipboard-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; flex-shrink: 0; border: 0.5px solid var(--border2); }
+  .clipboard-banner-text { flex: 1; min-width: 0; }
+  .clipboard-banner-title { font-size: 12px; font-weight: 600; color: var(--accent2); }
+  .clipboard-banner-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  #imagePreviewWrap { display: none; position: relative; }
+  #imagePreviewWrap.visible { display: block; }
+  #imagePreview { width: 100%; max-height: 260px; object-fit: contain; display: block; background: #111; border-radius: var(--radius) var(--radius) 0 0; }
+  .image-preview-footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 0.5px solid var(--border); }
+  .image-filename { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+  .remove-image-btn { font-size: 11px; color: var(--text3); background: none; border: 0.5px solid var(--border2); border-radius: 6px; padding: 3px 10px; cursor: pointer; transition: color 0.2s; white-space: nowrap; }
+  .remove-image-btn:hover { color: var(--red); border-color: rgba(224,90,78,0.4); }
+
+  .image-dir-row { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-top: 0.5px solid var(--border); flex-wrap: wrap; }
+  .image-dir-label { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; white-space: nowrap; }
+  .image-dir-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .image-dir-pill { font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--border2); color: var(--text2); cursor: pointer; transition: all 0.18s; }
+  .image-dir-pill.active { background: var(--accent); color: #0f0f0f; border-color: transparent; }
+
+  /* Vision warning */
+  .vision-hint { display: flex; align-items: flex-start; gap: 8px; background: rgba(110,143,202,0.1); border: 0.5px solid rgba(110,143,202,0.25); border-radius: var(--radius); padding: 11px 14px; font-size: 12px; color: #a0b8e0; line-height: 1.6; }
+  .vision-hint-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+
+  /* ── Emotion row ── */
+  .emotion-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px; overflow: hidden; max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease; }
+  .emotion-row.visible { max-height: 60px; opacity: 1; padding: 12px 16px; }
+  .emotion-icon { font-size: 15px; color: var(--accent); flex-shrink: 0; }
+  .emotion-row input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Syne', sans-serif; font-size: 14px; }
+  .emotion-row input::placeholder { color: var(--text3); }
+
+  /* ── Model card ── */
+  .model-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  .model-card-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); white-space: nowrap; }
+  .model-select-inline { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Syne', sans-serif; font-size: 13px; cursor: pointer; -webkit-appearance: none; appearance: none; text-align: right; min-width: 0; }
+  .model-select-inline option, .model-select-inline optgroup { background: #191919; color: var(--text); }
+  .model-chevron { color: var(--text3); font-size: 11px; flex-shrink: 0; }
+  .model-loading { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
+
+  /* ── Translate button ── */
+  .translate-btn { width: 100%; padding: 16px; background: var(--accent); color: #0f0f0f; border: none; border-radius: var(--radius); font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.2s, transform 0.1s; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .translate-btn:hover { opacity: 0.88; }
+  .translate-btn:active { transform: scale(0.985); }
+  .translate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Spinners ── */
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0f0f0f; border-radius: 50%; animation: spin 0.65s linear infinite; flex-shrink: 0; }
+  .spinner-sm { width: 12px; height: 12px; border: 1.5px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.65s linear infinite; display: inline-block; vertical-align: -2px; margin-right: 5px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Output ── */
+  .output-section { display: none; flex-direction: column; gap: 14px; }
+  .output-section.visible { display: flex; }
+  .out-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; animation: fadeUp 0.3s ease both; }
+  .out-card:nth-child(2) { animation-delay: 0.06s; }
+  .out-card:nth-child(3) { animation-delay: 0.12s; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .out-card-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px 10px; border-bottom: 0.5px solid var(--border); }
+  .out-card-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+  .out-card-label .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .copy-btn { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); background: none; border: 0.5px solid var(--border2); border-radius: 6px; padding: 3px 10px; cursor: pointer; transition: color 0.2s, border-color 0.2s; }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--green); border-color: var(--green); }
+  .out-card-body { padding: 14px 16px 16px; font-family: 'Noto Serif SC', serif; font-size: 16px; font-weight: 300; line-height: 1.8; color: var(--text); }
+  .out-card-body.tappable { cursor: pointer; user-select: none; -webkit-user-select: none; transition: background 0.15s; border-radius: 0 0 var(--radius) var(--radius); }
+  .out-card-body.tappable:active { background: rgba(201,169,110,0.07); }
+  .out-card-body.tappable.flash { background: rgba(90,184,138,0.12); }
+  .tap-hint { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text3); margin-top: 10px; display: block; letter-spacing: 0.04em; }
+  .out-card-body.meaning, .out-card-body.emotion { font-family: 'Syne', sans-serif; font-size: 14px; line-height: 1.75; color: var(--text2); font-weight: 400; }
+  .out-card-body.extracted { font-family: 'Noto Serif SC', serif; font-size: 14px; line-height: 1.75; color: var(--text2); font-weight: 300; }
+  .emotion-tag { display: inline-block; background: rgba(201,169,110,0.12); color: var(--accent2); border: 0.5px solid rgba(201,169,110,0.3); border-radius: 20px; font-size: 11px; font-family: 'DM Mono', monospace; padding: 3px 10px; margin-bottom: 10px; }
+
+  /* ── Settings ── */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; backdrop-filter: blur(4px); }
+  .overlay.open { display: flex; }
+  .settings-sheet { width: 100%; background: #1c1c1c; border-top: 0.5px solid var(--border2); border-radius: 20px 20px 0 0; padding: 20px 20px 48px; animation: slideUp 0.25s ease both; max-height: 92dvh; overflow-y: auto; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 0 auto 20px; }
+  .sheet-title { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 20px; }
+  .field-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .api-input-wrap { display: flex; gap: 8px; margin-bottom: 6px; }
+  .api-input { flex: 1; background: var(--surface); border: 0.5px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; padding: 10px 12px; outline: none; -webkit-appearance: none; transition: border-color 0.2s; }
+  .api-input:focus { border-color: var(--accent); }
+  .save-btn { padding: 10px 18px; background: var(--accent); color: #0f0f0f; border: none; border-radius: var(--radius-sm); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.2s; }
+  .save-btn:hover { opacity: 0.85; }
+  .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); margin-bottom: 20px; min-height: 20px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .status-dot.ok { background: var(--green); }
+  .hint { font-size: 12px; color: var(--text3); line-height: 1.7; margin-top: 4px; }
+  .hint a { color: var(--accent); text-decoration: none; }
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 20px 0; }
+  .clear-key-btn { font-size: 12px; color: var(--red); background: none; border: 0.5px solid rgba(224,90,78,0.3); border-radius: 6px; padding: 6px 14px; cursor: pointer; margin-top: 12px; }
+  .clear-key-btn:hover { background: rgba(224,90,78,0.08); }
+
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <span class="header-zh">译</span>
+    <span class="header-en">Translate</span>
+  </div>
+  <button class="settings-btn" onclick="openSettings()" aria-label="Settings">⚙</button>
+</div>
+
+<div class="main" id="mainScroll">
+
+  <div class="no-key-banner" id="noKeyBanner" onclick="openSettings()">
+    <strong>⚠</strong>
+    <span>No API key set — tap to add your OpenRouter key to get started.</span>
+  </div>
+
+  <div class="fallback-banner" id="fallbackBanner">
+    <span style="font-size:16px;flex-shrink:0;">⚡</span>
+    <span><strong>Free fallback active</strong> — using MyMemory translation. Meaning &amp; emotion analysis unavailable. <span style="cursor:pointer;text-decoration:underline;color:#c0d4f0;" onclick="openSettings()">Switch to AI</span></span>
+  </div>
+
+  <!-- Mode tabs -->
+  <div class="mode-tabs">
+    <div class="mode-tab active" id="tabText" onclick="setMode('text')">
+      <span class="tab-icon">✎</span> Text
+    </div>
+    <div class="mode-tab" id="tabImage" onclick="setMode('image')">
+      <span class="tab-icon">⬡</span> Image
+    </div>
+  </div>
+
+  <!-- ── TEXT MODE ── -->
+  <div id="textMode">
+    <div class="input-card" id="inputCard">
+      <div class="input-card-top">
+        <div class="lang-badge" id="langBadge">
+          <div class="lang-dot"></div>
+          <span class="lang-from" id="langFrom">—</span>
+          <span class="lang-arrow">→</span>
+          <span class="lang-to" id="langTo">—</span>
+        </div>
+        <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;" id="charCount">0</span>
+      </div>
+      <textarea id="inputText" placeholder="Type or paste English or Chinese…" oninput="onInput()" rows="5"></textarea>
+      <div class="input-footer">
+        <span style="font-size:12px;color:var(--text3);" id="detectionHint">Start typing — language detected automatically</span>
+        <button class="clear-btn" onclick="clearText()">✕ Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── IMAGE MODE ── -->
+  <div id="imageMode" style="display:none;">
+
+    <div class="image-card visible" id="imageCard">
+
+      <!-- Clipboard image banner (appears when clipboard has an image) -->
+      <div class="clipboard-preview-banner" id="clipboardBanner" onclick="useClipboardImage()">
+        <img class="clipboard-thumb" id="clipboardThumb" src="" alt="Clipboard image" />
+        <div class="clipboard-banner-text">
+          <div class="clipboard-banner-title">Image on clipboard</div>
+          <div class="clipboard-banner-sub">Tap to use this image</div>
+        </div>
+        <span style="font-size:18px; color:var(--accent); flex-shrink:0;">→</span>
+      </div>
+
+      <!-- Drop zone -->
+      <div class="image-drop-zone" id="dropZone"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="drop-icon">⬡</div>
+        <div class="drop-title">Add an image to translate</div>
+        <div class="drop-sub">Take a screenshot, copy an image,<br>or pick from your files</div>
+        <div class="drop-actions">
+          <button class="drop-action-btn primary" onclick="document.getElementById('fileInput').click()">⬆ Browse files</button>
+          <button class="drop-action-btn secondary" id="pasteBtn" onclick="pasteFromClipboard()">⎘ Paste image</button>
+        </div>
+      </div>
+
+      <!-- Preview (shown after upload) -->
+      <div id="imagePreviewWrap">
+        <img id="imagePreview" src="" alt="Uploaded image" />
+        <div class="image-preview-footer">
+          <span class="image-filename" id="imageFilename">image.jpg</span>
+          <button class="remove-image-btn" onclick="removeImage()">✕ Remove</button>
+        </div>
+      </div>
+
+      <!-- Direction selector for image mode -->
+      <div class="image-dir-row" id="imageDirRow" style="display:none;">
+        <span class="image-dir-label">Translate to:</span>
+        <div class="image-dir-pills">
+          <div class="image-dir-pill active" id="imgPillEN" onclick="setImageDir('to-en')">English</div>
+          <div class="image-dir-pill" id="imgPillZH" onclick="setImageDir('to-zh')">Chinese</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vision-hint">
+      <span class="vision-hint-icon">ℹ</span>
+      <span>Image translation requires a <strong style="color:#c0d4f0;">vision-capable model</strong> — e.g. Claude, GPT-4o, or Gemini. Select one in the model picker below.</span>
+    </div>
+
+  </div>
+
+  <!-- Emotion row (text/EN mode only) -->
+  <div class="emotion-row" id="emotionRow">
+    <span class="emotion-icon">◈</span>
+    <input type="text" id="emotionInput" placeholder="Emotional tone (optional) — e.g. tender, formal, playful…" />
+  </div>
+
+  <!-- Model selector -->
+  <div class="model-card">
+    <span class="model-card-label">Model</span>
+    <span id="modelLoadingIndicator" class="model-loading" style="display:none;"><span class="spinner-sm"></span>loading…</span>
+    <select class="model-select-inline" id="modelSelect" style="display:none;" onchange="saveSelectedModel()"></select>
+    <span class="model-chevron" id="modelChevron" style="display:none;">▾</span>
+    <span id="modelNoKey" class="model-loading">— add API key first</span>
+  </div>
+
+  <button class="translate-btn" id="translateBtn" onclick="doTranslate()">
+    <span id="btnText">TRANSLATE</span>
+  </button>
+
+  <!-- Output -->
+  <div class="output-section" id="outputSection">
+    <!-- Extracted text card (image mode only) -->
+    <div class="out-card" id="cardExtracted" style="display:none;">
+      <div class="out-card-header">
+        <div class="out-card-label"><div class="dot" style="background:var(--blue)"></div>Text extracted from image</div>
+        <button class="copy-btn" id="copyExtBtn" onclick="copyField('extractedText','copyExtBtn')">Copy</button>
+      </div>
+      <div class="out-card-body extracted" id="extractedText"></div>
+    </div>
+
+    <div class="out-card">
+      <div class="out-card-header">
+        <div class="out-card-label"><div class="dot"></div><span id="translationLabel">Translation</span></div>
+        <span id="tapCopyFeedback" style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green);opacity:0;transition:opacity 0.3s;">Copied ✓</span>
+      </div>
+      <div class="out-card-body tappable" id="translationText" onclick="tapToCopy()" title="Tap to copy"></div>
+    </div>
+    <div class="out-card">
+      <div class="out-card-header">
+        <div class="out-card-label"><div class="dot" style="background:#6e8fca"></div>Meaning explanation</div>
+      </div>
+      <div class="out-card-body meaning" id="meaningText"></div>
+    </div>
+    <div class="out-card">
+      <div class="out-card-header">
+        <div class="out-card-label"><div class="dot" style="background:#7abc9a"></div>Emotional nuance</div>
+      </div>
+      <div class="out-card-body emotion" id="emotionText"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="fileInput" accept="image/*" onchange="onFileSelected(event)" />
+
+<!-- Settings overlay -->
+<div class="overlay" id="settingsOverlay" onclick="overlayClick(event)">
+  <div class="settings-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Settings</div>
+    <div class="field-label">OpenRouter API Key</div>
+    <div class="api-input-wrap">
+      <input type="password" class="api-input" id="apiKeyInput" placeholder="sk-or-v1-…" autocomplete="off" />
+      <button class="save-btn" id="saveKeyBtn" onclick="saveKey()">Save</button>
+    </div>
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">No key saved</span>
+    </div>
+    <div class="hint">Get a free key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>. Your key is stored only on this device.</div>
+    <button class="clear-key-btn" id="clearKeyBtn" onclick="clearKey()" style="display:none;">Remove saved key</button>
+    <div class="divider"></div>
+    <div class="field-label">Free fallback</div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Use free translation fallback</div>
+        <div class="toggle-sub">Uses MyMemory — no API key needed. No AI analysis.</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="fallbackToggle" onchange="saveFallbackPref()" />
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+    <div class="hint" style="margin-top:0;">Auto-fallback also activates when AI hits a rate limit. MyMemory limit: 5000 chars/day — <a href="https://mymemory.translated.net" target="_blank">mymemory.translated.net</a></div>
+    <div class="divider"></div>
+    <div class="field-label">About</div>
+    <div class="hint">English ⇄ Chinese (Simplified) with automatic language detection and image translation. Models loaded live from your OpenRouter account.</div>
+  </div>
+</div>
+
+<script>
+  let mode = 'text';
+  let direction = 'en-zh';
+  let imageDir = 'to-en';
+  let imageBase64 = null;
+  let imageMime = 'image/jpeg';
+  let modelsLoaded = false;
+  let detectTimer = null;
+
+  // ── Mode tabs ──
+  function setMode(m) {
+    mode = m;
+    document.getElementById('tabText').classList.toggle('active', m === 'text');
+    document.getElementById('tabImage').classList.toggle('active', m === 'image');
+    document.getElementById('textMode').style.display = m === 'text' ? 'block' : 'none';
+    document.getElementById('imageMode').style.display = m === 'image' ? 'block' : 'none';
+    document.getElementById('outputSection').classList.remove('visible');
+    if (m === 'text') {
+      onInput();
+    } else {
+      document.getElementById('emotionRow').classList.remove('visible');
+      // Auto-check clipboard whenever user enters image mode
+      if (!imageBase64) checkClipboardForImage();
+    }
+  }
+
+  // ── Language detection (text mode) ──
+  function detectLanguage(text) {
+    if (!text || !text.trim()) return null;
+    const chineseChars = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g) || []).length;
+    const meaningful = text.replace(/\s/g, '').length || 1;
+    return (chineseChars / meaningful) > 0.15 ? 'zh' : 'en';
+  }
+
+  function updateDetectionUI(lang) {
+    const badge = document.getElementById('langBadge');
+    const card = document.getElementById('inputCard');
+    const hint = document.getElementById('detectionHint');
+    badge.classList.remove('active-en', 'active-zh');
+    card.classList.remove('detected-en', 'detected-zh');
+    if (!lang) {
+      document.getElementById('langFrom').textContent = '—';
+      document.getElementById('langTo').textContent = '—';
+      hint.textContent = 'Start typing — language detected automatically';
+      document.getElementById('emotionRow').classList.remove('visible');
+      return;
+    }
+    if (lang === 'en') {
+      direction = 'en-zh';
+      document.getElementById('langFrom').textContent = 'English';
+      document.getElementById('langTo').textContent = '中文';
+      hint.textContent = 'English detected → translating to Chinese';
+      badge.classList.add('active-en');
+      card.classList.add('detected-en');
+      document.getElementById('emotionRow').classList.add('visible');
+      document.getElementById('translationLabel').textContent = 'Chinese translation';
+    } else {
+      direction = 'zh-en';
+      document.getElementById('langFrom').textContent = '中文';
+      document.getElementById('langTo').textContent = 'English';
+      hint.textContent = 'Chinese detected → translating to English';
+      badge.classList.add('active-zh');
+      card.classList.add('detected-zh');
+      document.getElementById('emotionRow').classList.remove('visible');
+      document.getElementById('translationLabel').textContent = 'English translation';
+    }
+  }
+
+  function onInput() {
+    const val = document.getElementById('inputText').value;
+    document.getElementById('charCount').textContent = val.length;
+    clearTimeout(detectTimer);
+    if (!val.length) { updateDetectionUI(null); return; }
+    if (val.length > 10) { updateDetectionUI(detectLanguage(val)); }
+    else { detectTimer = setTimeout(() => updateDetectionUI(detectLanguage(val)), 300); }
+  }
+
+  function clearText() {
+    document.getElementById('inputText').value = '';
+    document.getElementById('emotionInput').value = '';
+    document.getElementById('charCount').textContent = '0';
+    document.getElementById('outputSection').classList.remove('visible');
+    updateDetectionUI(null);
+  }
+
+  // ── Image mode ──
+  function setImageDir(d) {
+    imageDir = d;
+    document.getElementById('imgPillEN').classList.toggle('active', d === 'to-en');
+    document.getElementById('imgPillZH').classList.toggle('active', d === 'to-zh');
+    document.getElementById('translationLabel').textContent = d === 'to-en' ? 'English translation' : 'Chinese translation';
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.add('dragover');
+  }
+  function onDragLeave() {
+    document.getElementById('dropZone').classList.remove('dragover');
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('dragover');
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith('image/')) loadImageFile(file);
+  }
+  function onFileSelected(e) {
+    const file = e.target.files?.[0];
+    if (file) loadImageFile(file);
+    e.target.value = '';
+  }
+
+  // ── Clipboard support ──
+  let clipboardBase64 = null;
+  let clipboardMime = null;
+
+  // Called when entering image mode — silently checks clipboard for an image
+  async function checkClipboardForImage() {
+    if (!navigator.clipboard || !navigator.clipboard.read) return;
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imgType = item.types.find(t => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            clipboardBase64 = dataUrl.split(',')[1];
+            clipboardMime = imgType;
+            document.getElementById('clipboardThumb').src = dataUrl;
+            document.getElementById('clipboardBanner').classList.add('visible');
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    } catch (e) {
+      // Permission denied or no image — silently ignore
+    }
+    document.getElementById('clipboardBanner').classList.remove('visible');
+  }
+
+  // Called when user clicks the clipboard banner
+  function useClipboardImage() {
+    if (!clipboardBase64) return;
+    imageBase64 = clipboardBase64;
+    imageMime = clipboardMime;
+    const src = document.getElementById('clipboardThumb').src;
+    document.getElementById('imagePreview').src = src;
+    document.getElementById('imageFilename').textContent = 'clipboard image';
+    document.getElementById('imagePreviewWrap').classList.add('visible');
+    document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('clipboardBanner').classList.remove('visible');
+    document.getElementById('imageDirRow').style.display = 'flex';
+    document.getElementById('outputSection').classList.remove('visible');
+  }
+
+  // Explicit paste button — triggers clipboard read on user gesture
+  async function pasteFromClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert('Clipboard access is not supported in this browser. Try using the Browse files button or taking a screenshot and sharing directly.');
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      let found = false;
+      for (const item of items) {
+        const imgType = item.types.find(t => t.startsWith('image/'));
+        if (imgType) {
+          const blob = await item.getType(imgType);
+          loadImageBlob(blob, imgType, 'clipboard image');
+          found = true;
+          break;
+        }
+      }
+      if (!found) alert('No image found on clipboard. Copy an image first, then tap Paste.');
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        alert('Clipboard permission denied. Allow clipboard access in your browser settings, or use Browse files instead.');
+      } else {
+        alert('Could not read clipboard: ' + e.message);
+      }
+    }
+  }
+
+  // Global paste event — catches Ctrl+V / long-press paste anywhere on the page
+  document.addEventListener('paste', (e) => {
+    if (mode !== 'image') return;
+    const items = e.clipboardData?.items || [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) { loadImageBlob(blob, item.type, 'pasted image'); e.preventDefault(); return; }
+      }
+    }
+  });
+
+  function loadImageBlob(blob, mime, name) {
+    imageMime = mime || 'image/png';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      imageBase64 = dataUrl.split(',')[1];
+      document.getElementById('imagePreview').src = dataUrl;
+      document.getElementById('imageFilename').textContent = name || 'pasted image';
+      document.getElementById('imagePreviewWrap').classList.add('visible');
+      document.getElementById('dropZone').style.display = 'none';
+      document.getElementById('clipboardBanner').classList.remove('visible');
+      document.getElementById('imageDirRow').style.display = 'flex';
+      document.getElementById('outputSection').classList.remove('visible');
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  function loadImageFile(file) {
+    loadImageBlob(file, file.type, file.name);
+  }
+
+  function removeImage() {
+    imageBase64 = null;
+    document.getElementById('imagePreview').src = '';
+    document.getElementById('imagePreviewWrap').classList.remove('visible');
+    document.getElementById('dropZone').style.display = 'flex';
+    document.getElementById('imageDirRow').style.display = 'none';
+    document.getElementById('outputSection').classList.remove('visible');
+    // Re-check clipboard in case image is still there
+    checkClipboardForImage();
+  }
+
+  // ── Models ──
+  async function loadModels() {
+    const key = localStorage.getItem('or_api_key');
+    if (!key) return;
+    document.getElementById('modelNoKey').style.display = 'none';
+    document.getElementById('modelLoadingIndicator').style.display = 'inline-flex';
+    document.getElementById('modelSelect').style.display = 'none';
+    document.getElementById('modelChevron').style.display = 'none';
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      const data = await res.json();
+      const models = (data.data || []).filter(m => m.id && m.name).sort((a, b) => a.name.localeCompare(b.name));
+      const sel = document.getElementById('modelSelect');
+      sel.innerHTML = '';
+      const claudeModels = models.filter(m => m.id.includes('anthropic') || m.id.includes('claude'));
+      const otherModels  = models.filter(m => !m.id.includes('anthropic') && !m.id.includes('claude'));
+      if (claudeModels.length) {
+        const grp = document.createElement('optgroup');
+        grp.label = '— Anthropic / Claude';
+        claudeModels.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; grp.appendChild(o); });
+        sel.appendChild(grp);
+      }
+      if (otherModels.length) {
+        const grp = document.createElement('optgroup');
+        grp.label = '— Other models';
+        otherModels.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; grp.appendChild(o); });
+        sel.appendChild(grp);
+      }
+      const saved = localStorage.getItem('or_model');
+      if (saved && sel.querySelector(`option[value="${saved}"]`)) { sel.value = saved; }
+      else if (claudeModels.length) {
+        const sonnet = claudeModels.find(m => m.id.includes('sonnet')) || claudeModels[0];
+        sel.value = sonnet.id;
+        localStorage.setItem('or_model', sel.value);
+      }
+      document.getElementById('modelLoadingIndicator').style.display = 'none';
+      sel.style.display = 'block';
+      document.getElementById('modelChevron').style.display = 'block';
+      modelsLoaded = true;
+    } catch(e) {
+      document.getElementById('modelLoadingIndicator').style.display = 'none';
+      document.getElementById('modelNoKey').textContent = '— could not load models';
+      document.getElementById('modelNoKey').style.display = 'block';
+    }
+  }
+
+  function saveSelectedModel() {
+    localStorage.setItem('or_model', document.getElementById('modelSelect').value);
+  }
+
+  // ── Translate ──
+  function isFallbackMode() {
+    return localStorage.getItem('use_fallback') === 'true' || !localStorage.getItem('or_api_key');
+  }
+
+  async function doTranslate() {
+    if (mode === 'image' && !imageBase64) { alert('Please upload an image first.'); return; }
+    if (mode === 'text' && !document.getElementById('inputText').value.trim()) { return; }
+
+    const btn = document.getElementById('translateBtn');
+    btn.disabled = true;
+    document.getElementById('btnText').innerHTML = '<span style="display:flex;align-items:center;gap:8px"><span class="spinner"></span>Translating…</span>';
+    document.getElementById('outputSection').classList.remove('visible');
+    document.getElementById('cardExtracted').style.display = 'none';
+
+    const useFallback = isFallbackMode();
+
+    try {
+      if (useFallback && mode === 'text') {
+        await translateTextFallback();
+      } else {
+        const key = localStorage.getItem('or_api_key');
+        if (!key) { openSettings(); btn.disabled = false; document.getElementById('btnText').textContent = 'TRANSLATE'; return; }
+        const model = document.getElementById('modelSelect').value || localStorage.getItem('or_model');
+        if (!model) { alert('Please wait for models to load.'); btn.disabled = false; document.getElementById('btnText').textContent = 'TRANSLATE'; return; }
+
+        try {
+          if (mode === 'image') { await translateImage(key, model); }
+          else { await translateText(key, model); }
+        } catch(e) {
+          // Auto-fallback on rate limit or quota errors
+          const msg = e.message || '';
+          const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('limit') || msg.includes('quota') || msg.includes('credits') || msg.includes('insufficient');
+          if (isRateLimit && mode === 'text') {
+            document.getElementById('btnText').innerHTML = '<span style="display:flex;align-items:center;gap:8px"><span class="spinner"></span>Trying fallback…</span>';
+            await translateTextFallback(true);
+          } else {
+            throw e;
+          }
+        }
+      }
+    } catch(e) {
+      setTranslationText('Error: ' + e.message);
+      document.getElementById('meaningText').textContent = 'Please check your API key and model, then try again.';
+      document.getElementById('emotionText').textContent = '';
+      document.getElementById('outputSection').classList.add('visible');
+    }
+
+    btn.disabled = false;
+    document.getElementById('btnText').textContent = 'TRANSLATE';
+  }
+
+  // ── MyMemory fallback ──
+  async function translateTextFallback(autoTriggered = false) {
+    const text = document.getElementById('inputText').value.trim();
+    const lang = detectLanguage(text);
+    const dir = lang === 'en' ? 'en-zh' : 'zh-en';
+    const langpair = dir === 'en-zh' ? 'en|zh-CN' : 'zh-CN|en';
+
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MyMemory error: HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (data.responseStatus !== 200 && data.responseStatus !== '200') {
+      throw new Error(data.responseDetails || 'MyMemory translation failed');
+    }
+
+    const translated = data.responseData?.translatedText || '—';
+    setTranslationText(translated);
+
+    document.getElementById('translationLabel').textContent = dir === 'en-zh' ? 'Chinese translation' : 'English translation';
+    document.getElementById('meaningText').innerHTML = '<span class="na-text">Not available in free fallback mode</span>';
+    document.getElementById('emotionText').innerHTML = '<span class="na-text">Not available in free fallback mode</span>';
+
+    if (autoTriggered) {
+      document.getElementById('fallbackBanner').classList.add('visible');
+    }
+
+    document.getElementById('outputSection').classList.add('visible');
+    setTimeout(() => document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+  }
+
+  async function translateText(key, model) {
+    const text = document.getElementById('inputText').value.trim();
+    const lang = detectLanguage(text);
+    const dir = lang === 'en' ? 'en-zh' : 'zh-en';
+    const emotion = document.getElementById('emotionInput').value.trim();
+
+    const system = `You are an expert translator between English and Chinese (Simplified). Always respond in valid JSON only — no markdown, no preamble, no code fences.
+Return exactly:
+{"translation":"...","meaning":"...","emotion":"..."}`;
+
+    const userPrompt = dir === 'en-zh'
+      ? `Translate this English text to Chinese (Simplified).${emotion ? ` Match this emotional tone: ${emotion}.` : ''}\n\nText: "${text}"`
+      : `Translate this Chinese text to English. Identify the emotional nuance.\n\nText: "${text}"`;
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'translator-app', 'X-Title': '译 Translate' },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: userPrompt }] })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e?.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const parsed = JSON.parse(data.choices[0].message.content.replace(/```json|```/g,'').trim());
+
+    setTranslationText(parsed.translation || '—');
+    document.getElementById('meaningText').textContent = parsed.meaning || '—';
+
+    const emotionEl = document.getElementById('emotionText');
+    emotionEl.innerHTML = '';
+    if (emotion && dir === 'en-zh') {
+      const tag = document.createElement('div'); tag.className = 'emotion-tag'; tag.textContent = emotion;
+      emotionEl.appendChild(tag);
+    }
+    emotionEl.appendChild(document.createTextNode(parsed.emotion || '—'));
+
+    document.getElementById('outputSection').classList.add('visible');
+    setTimeout(() => document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+  }
+
+  async function translateImage(key, model) {
+    const targetLang = imageDir === 'to-en' ? 'English' : 'Chinese (Simplified)';
+    const targetLabel = imageDir === 'to-en' ? 'English translation' : 'Chinese translation';
+    document.getElementById('translationLabel').textContent = targetLabel;
+
+    const system = `You are an expert at reading text from images and translating between English and Chinese. Always respond in valid JSON only — no markdown, no preamble, no code fences.
+Return exactly:
+{"extracted":"full text extracted from the image exactly as written","translation":"translation of that text into ${targetLang}","meaning":"explanation in English of the meaning, idioms, or notable phrasing","emotion":"description in English of the emotional tone and nuance"}`;
+
+    const userContent = [
+      { type: 'image_url', image_url: { url: `data:${imageMime};base64,${imageBase64}` } },
+      { type: 'text', text: `Extract all text from this image and translate it to ${targetLang}. If the image has no readable text, say so in the extracted field.` }
+    ];
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'translator-app', 'X-Title': '译 Translate' },
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: userContent }] })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e?.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const parsed = JSON.parse(data.choices[0].message.content.replace(/```json|```/g,'').trim());
+
+    // Show extracted text card
+    if (parsed.extracted) {
+      document.getElementById('extractedText').textContent = parsed.extracted;
+      document.getElementById('cardExtracted').style.display = 'block';
+    }
+    setTranslationText(parsed.translation || '—');
+    document.getElementById('meaningText').textContent = parsed.meaning || '—';
+    document.getElementById('emotionText').textContent = parsed.emotion || '—';
+
+    document.getElementById('outputSection').classList.add('visible');
+    setTimeout(() => document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+  }
+
+  // ── Tap-to-copy on translation ──
+  function tapToCopy() {
+    const el = document.getElementById('translationText');
+    const text = el.dataset.translationContent || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      el.classList.add('flash');
+      const fb = document.getElementById('tapCopyFeedback');
+      fb.style.opacity = '1';
+      setTimeout(() => { el.classList.remove('flash'); fb.style.opacity = '0'; }, 1200);
+    }).catch(() => {
+      // Fallback: select the text
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+  }
+
+  function setTranslationText(text) {
+    const el = document.getElementById('translationText');
+    el.dataset.translationContent = text;
+    el.innerHTML = '';
+    el.appendChild(document.createTextNode(text));
+    const hint = document.createElement('span');
+    hint.className = 'tap-hint';
+    hint.textContent = 'tap to copy';
+    el.appendChild(hint);
+  }
+
+  // ── Copy (for other fields) ──
+  function copyField(id, btnId) {
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById(btnId);
+      btn.textContent = 'Copied ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    }).catch(() => {
+      const range = document.createRange(); range.selectNodeContents(document.getElementById(id));
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    });
+  }
+
+  // ── Settings ──
+  function openSettings() {
+    const saved = localStorage.getItem('or_api_key');
+    if (saved) { document.getElementById('apiKeyInput').value = saved; setStatusOk(); }
+    else { document.getElementById('statusDot').classList.remove('ok'); document.getElementById('statusText').textContent = 'No key saved'; document.getElementById('clearKeyBtn').style.display = 'none'; }
+    document.getElementById('fallbackToggle').checked = localStorage.getItem('use_fallback') === 'true';
+    document.getElementById('settingsOverlay').classList.add('open');
+  }
+  function overlayClick(e) { if (e.target === document.getElementById('settingsOverlay')) closeSettings(); }
+  function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+  function saveKey() {
+    const val = document.getElementById('apiKeyInput').value.trim();
+    if (!val) return;
+    const btn = document.getElementById('saveKeyBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    localStorage.setItem('or_api_key', val);
+    setStatusOk(); checkBanner(); modelsLoaded = false;
+    loadModels().then(() => { btn.disabled = false; btn.textContent = 'Save'; setTimeout(closeSettings, 400); });
+  }
+  function clearKey() {
+    localStorage.removeItem('or_api_key'); localStorage.removeItem('or_model');
+    document.getElementById('apiKeyInput').value = '';
+    document.getElementById('statusDot').classList.remove('ok');
+    document.getElementById('statusText').textContent = 'No key saved';
+    document.getElementById('clearKeyBtn').style.display = 'none';
+    document.getElementById('modelSelect').style.display = 'none';
+    document.getElementById('modelChevron').style.display = 'none';
+    document.getElementById('modelNoKey').textContent = '— add API key first';
+    document.getElementById('modelNoKey').style.display = 'block';
+    modelsLoaded = false; checkBanner();
+  }
+  function setStatusOk() {
+    document.getElementById('statusDot').classList.add('ok');
+    document.getElementById('statusText').textContent = 'Key saved · models loading…';
+    document.getElementById('clearKeyBtn').style.display = 'inline-block';
+  }
+  function checkBanner() {
+    const hasKey = !!localStorage.getItem('or_api_key');
+    document.getElementById('noKeyBanner').classList.toggle('visible', !hasKey);
+  }
+  function saveFallbackPref() {
+    const on = document.getElementById('fallbackToggle').checked;
+    localStorage.setItem('use_fallback', on ? 'true' : 'false');
+    updateFallbackBanner();
+  }
+  function updateFallbackBanner() {
+    const on = isFallbackMode();
+    document.getElementById('fallbackBanner').classList.toggle('visible', on && !!localStorage.getItem('or_api_key'));
+  }
+
+  // ── Init ──
+  checkBanner();
+  if (localStorage.getItem('or_api_key')) loadModels();
+  if (localStorage.getItem('use_fallback') === 'true') {
+    document.getElementById('fallbackToggle').checked = true;
+  }
+  updateFallbackBanner();
+
+  // ── Register Service Worker ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .catch(err => console.log('SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>
